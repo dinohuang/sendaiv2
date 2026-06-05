@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="仙台東北行程">
+<meta name="theme-color" content="#4a7860">
+<title>仙台・東北 7天行程</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  // 進度條動畫（11秒填滿）
+  var b=document.getElementById('ssBar');
+  if(b){b.style.transitionDuration='11000ms';setTimeout(function(){b.style.width='100%';},100);}
+  // Splash 點擊處理：點畫面任何地方都可跳過
+  var sp=document.getElementById('splash');
+  if(sp) sp.onclick=function(){splashExit();};
+  document.querySelectorAll('.ss-dot').forEach(function(d,i){
+    d.onclick=function(e){e.stopPropagation();splashTo(i);};
+  });
+  var sk=document.getElementById('ss-skip');
+  if(sk) sk.onclick=function(e){e.stopPropagation();splashExit();};
+});
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+html,body{height:100%;background:#f4faf5;color:#1a2e22;font-family:-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;overflow:hidden;overscroll-behavior:none;}
+
+/* TOPBAR */
+#topbar{position:fixed;top:0;left:0;right:0;z-index:500;background:linear-gradient(135deg,#4a7860 0%,#6a9e80 100%);box-shadow:0 2px 12px rgba(0,0,0,.25);}
+#topbar-inner{display:flex;align-items:center;gap:10px;padding:14px 14px 10px;padding-top:calc(14px + env(safe-area-inset-top,0px));background:linear-gradient(115deg,rgba(40,62,50,.74) 0%,rgba(58,90,72,.58) 45%,rgba(58,107,138,.5) 100%),url('https://zh-tw.travelyonezawa.com/wp-content/uploads/2021/12/%E4%B8%8A%E6%9D%89%E8%A8%98%E5%BF%B5%E9%A4%A8-02w600.jpg');background-size:cover;background-position:center 45%;}
+#topbar h1{color:#fff;font-size:.92em;font-weight:700;flex:1;line-height:1.3;text-shadow:0 1px 3px rgba(0,0,0,.18);}
+#topbar h1 span{display:block;font-size:.72em;font-weight:400;opacity:.88;margin-top:1px;}
+#topbar-badge{background:rgba(255,255,255,.2);color:rgba(255,255,255,.95);font-size:.63em;padding:2px 8px;border-radius:10px;white-space:nowrap;border:1px solid rgba(255,255,255,.25);}
+
+/* VIEW SWITCHER */
+#viewSwitch{display:flex;background:rgba(0,0,0,.12);margin:4px 12px 6px;border-radius:9px;padding:3px;gap:2px;}
+.vbtn{flex:1;text-align:center;padding:5px 3px;border-radius:6px;font-size:.68em;font-weight:700;color:rgba(255,255,255,.72);cursor:pointer;transition:all .2s;user-select:none;}
+.vbtn.active{background:#fff;color:#2d6048;}
+
+/* DAY TABS */
+#dayTabs{display:flex;overflow-x:auto;scrollbar-width:none;border-top:1px solid rgba(255,255,255,.2);padding:0 6px;-webkit-overflow-scrolling:touch;}
+#dayTabs::-webkit-scrollbar{display:none;}
+.day-tab{flex-shrink:0;padding:7px 11px;color:rgba(255,255,255,.6);font-size:.72em;font-weight:600;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;user-select:none;text-align:center;line-height:1.3;transition:color .15s,border-color .15s;}
+.day-tab.active{color:#fff;border-bottom-color:rgba(255,255,255,.95);}
+
+/* VIEWS */
+.view{display:none;position:fixed;left:0;right:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.view.active{display:block;}
+#mapView{overflow:hidden;}
+#leafletMap{width:100%;height:100%;}
+
+/* CARD CONTENT */
+.card-content{padding:10px 12px 20px;max-width:600px;margin:0 auto;}
+.day-sec{display:none;}
+.day-sec.active{display:block;}
+
+/* DAY HEADER */
+.day-hdr{border-radius:12px;padding:12px 14px;margin-bottom:10px;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.1);}
+.day-hdr h2{font-size:1em;font-weight:700;}
+.day-hdr p{font-size:.76em;opacity:.88;margin-top:3px;}
+
+/* SPOT CARD */
+.spot-card{background:#fff;border-radius:12px;margin-bottom:8px;overflow:hidden;box-shadow:0 1px 4px rgba(30,80,50,.07);border:1px solid #d8edda;}
+.sc-head{display:flex;align-items:flex-start;gap:10px;padding:11px 12px 8px;}
+.sc-icon{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.2em;flex-shrink:0;}
+.sc-meta{flex:1;min-width:0;}
+.sc-time{font-size:.69em;font-weight:600;color:#4a7860;margin-bottom:1px;}
+.sc-name{font-size:.92em;font-weight:700;line-height:1.3;color:#1a2e22;}
+.sc-sub{font-size:.74em;color:#5a7860;margin-top:2px;line-height:1.4;}
+.sc-btns{display:flex;flex-wrap:wrap;gap:6px;padding:2px 12px 12px;}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:8px 13px;border-radius:20px;font-size:.76em;font-weight:600;text-decoration:none;color:#fff;user-select:none;}
+.btn:active{opacity:.7;transform:scale(.97);}
+.btn-map{background:#4285f4;}
+.btn-tab{background:#e04545;}
+.btn-off{background:#4a7860;}
+.note{margin:0 12px 10px;background:#f0fbf2;border-left:3px solid #6aac7a;border-radius:0 8px 8px 0;padding:7px 10px;font-size:.75em;color:#1a4a28;line-height:1.55;}
+.sec-lbl{font-size:.67em;font-weight:700;color:#4a7060;text-transform:uppercase;letter-spacing:.06em;padding:7px 2px 3px;}
+
+/* OVERVIEW */
+.alert-card{background:#f0fbf2;border:1.5px solid #b8ddc0;border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.alert-card h3{font-size:.85em;font-weight:700;color:#2a5a38;margin-bottom:7px;}
+.alert-card li{font-size:.78em;color:#1a4028;padding:2.5px 0;line-height:1.5;list-style:none;}
+.alert-card li::before{content:attr(data-i);margin-right:6px;}
+.rt-card,.info-card{background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(30,80,50,.07);border:1px solid #d8edda;}
+.rt-step{display:flex;align-items:flex-start;gap:10px;padding:6px 0;position:relative;}
+.rt-step:not(:last-child)::after{content:'';position:absolute;left:14px;top:30px;width:2px;height:calc(100% - 6px);background:#d8edda;}
+.rt-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8em;font-weight:700;color:#fff;flex-shrink:0;z-index:1;}
+.rt-info{flex:1;padding-top:3px;}
+.rt-info strong{font-size:.84em;display:block;}
+.rt-info span{font-size:.71em;color:#5a7860;}
+.info-card h3{font-size:.85em;font-weight:700;margin-bottom:8px;color:#2a5a38;}
+.irow{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #e8f5ea;font-size:.78em;}
+.irow:last-child{border-bottom:none;}
+.irow .lbl{color:#5a7860;min-width:56px;flex-shrink:0;}
+.irow .val{flex:1;font-weight:500;}
+
+/* MINI MAP */
+.mini-map-card{background:#fff;border-radius:12px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 4px rgba(30,80,50,.1);border:1px solid #d8edda;}
+.mini-map-hdr{background:linear-gradient(135deg,#3a6b8a,#5a8fa8);color:#fff;padding:9px 14px;font-size:.82em;font-weight:700;}
+#miniMap{height:210px;}
+.route-pills{padding:8px 12px 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.pill{padding:3px 9px;border-radius:12px;font-size:.72em;font-weight:600;color:#fff;white-space:nowrap;}
+
+
+/* TABLE VIEW */
+.tbl-wrap{padding:8px 8px 16px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.tbl-wrap table{width:100%;border-collapse:collapse;font-size:.74em;min-width:480px;}
+.tbl-wrap th{background:#4a7860;color:#fff;padding:8px 7px;text-align:left;font-weight:700;white-space:nowrap;}
+.tbl-wrap td{padding:6px 7px;border-bottom:1px solid #d8edda;vertical-align:top;line-height:1.4;}
+.tbl-wrap tr:nth-child(even) td{background:#f4faf5;}
+.day-row td{background:#d8edda!important;font-weight:700;color:#1a4028;font-size:.8em;padding:6px 7px;}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:.68em;font-weight:600;color:#fff;white-space:nowrap;}
+.tlink{color:#4285f4;text-decoration:none;font-size:.74em;display:inline-block;margin:1px 2px 1px 0;}
+
+/* MAP LEGEND */
+.map-legend{position:absolute;bottom:8px;right:8px;z-index:400;background:rgba(244,250,245,.94);border-radius:9px;padding:7px 10px;font-size:.68em;box-shadow:0 2px 8px rgba(0,0,0,.12);border:1px solid #d8edda;}
+.map-legend div{display:flex;align-items:center;gap:5px;margin-bottom:2px;}
+
+/* BOTTOM NAV */
+#bnav{position:fixed;bottom:0;left:0;right:0;z-index:500;background:rgba(244,250,245,.97);border-top:1px solid #c8e0ca;display:flex;padding-bottom:env(safe-area-inset-bottom,0);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:7px 2px 5px;cursor:pointer;user-select:none;font-size:.55em;color:#6a9a78;font-weight:600;}
+.bnav-item.active{color:#4a7860;}
+.bnav-icon{font-size:1.45em;margin-bottom:1px;}
+
+/* ── INFO BOTTOM SHEET ── */
+.info-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;opacity:0;pointer-events:none;transition:opacity .3s;}
+.info-overlay.open{opacity:1;pointer-events:auto;}
+.info-sheet{position:fixed;bottom:0;left:0;right:0;z-index:901;background:#fff;border-radius:18px 18px 0 0;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;transform:translateY(100%);transition:transform .35s cubic-bezier(.4,0,.2,1);padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));}
+.info-sheet.open{transform:translateY(0);}
+.info-handle{width:36px;height:4px;background:#ddd;border-radius:2px;margin:10px auto 0;}
+.info-hdr{padding:10px 14px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e8f5ea;}
+.info-ttl{font-size:.95em;font-weight:700;color:#1a2e22;flex:1;line-height:1.3;}
+.info-x{width:30px;height:30px;background:#f0f4f0;border:none;border-radius:50%;cursor:pointer;font-size:1em;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#444;}
+.info-photos{display:grid;gap:4px;padding:10px 12px 4px;}
+.info-photos.two{grid-template-columns:1fr 1fr;}
+.info-photos.one{grid-template-columns:1fr;}
+.info-img{width:100%;border-radius:10px;background:#e8f5ea;object-fit:cover;}
+.info-photos.two .info-img{aspect-ratio:4/3;}
+.info-photos.one .info-img{aspect-ratio:16/9;max-height:200px;}
+.info-body{padding:6px 14px 10px;}
+.info-desc{font-size:.84em;color:#2d4a35;line-height:1.72;margin-bottom:12px;}
+.info-lnks{display:flex;flex-wrap:wrap;gap:6px;}
+.ibtn{display:inline-flex;align-items:center;gap:3px;padding:8px 13px;border-radius:18px;font-size:.76em;font-weight:600;text-decoration:none;color:#fff;}
+.ibtn:active{opacity:.7;}
+.ibtn-site{background:#4a7860;}.ibtn-article{background:#3a6b8a;}.ibtn-photo{background:#7b52ab;}
+.btn-info{background:#8a6a4a;}
+
+
+
+/* ── SPLASH ── */
+#splash{position:fixed;inset:0;z-index:9999;background:#070f09;overflow:hidden;}
+.ss-slide{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.4s ease;pointer-events:none;}
+.ss-slide.active{opacity:1;animation:kb 8s ease-out forwards;}
+@keyframes kb{from{transform:scale(1.07);}to{transform:scale(1.0);}}
+.ss-grad{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to top,rgba(0,0,0,.82) 0%,rgba(0,0,0,.15) 55%,rgba(0,0,0,.04) 100%);}
+.ss-txt{position:absolute;bottom:calc(72px + env(safe-area-inset-bottom));left:0;right:0;text-align:center;pointer-events:none;}
+.ss-leaf{font-size:2.2em;display:block;filter:drop-shadow(0 2px 10px rgba(0,0,0,.5));}
+.ss-main{font-size:2em;font-weight:800;color:#fff;letter-spacing:.2em;display:block;margin-top:8px;text-shadow:0 2px 14px rgba(0,0,0,.65);}
+.ss-dates{font-size:.83em;color:rgba(255,255,255,.76);letter-spacing:.12em;display:block;margin-top:6px;}
+.ss-place{font-size:1em;font-weight:700;color:rgba(255,218,140,.95);display:block;margin-top:16px;letter-spacing:.06em;min-height:1.3em;}
+.ss-sub{font-size:.74em;color:rgba(255,255,255,.7);display:block;margin-top:3px;min-height:1.2em;}
+.ss-dots{display:flex;justify-content:center;gap:8px;margin-top:14px;}
+.ss-dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.3);cursor:pointer;transition:background .35s,transform .35s;}
+.ss-dot.on{background:rgba(255,218,140,.95);transform:scale(1.3);}
+#ss-skip{position:absolute;top:calc(18px + env(safe-area-inset-top));right:18px;z-index:10;color:rgba(255,255,255,.92);font-size:.8em;font-family:-apple-system,sans-serif;background:rgba(0,0,0,.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:9px 17px;border-radius:20px;border:1px solid rgba(255,255,255,.3);cursor:pointer;user-select:none;}
+#ss-skip:active{background:rgba(0,0,0,.65);}
+.ss-bar{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.12);}
+#ssBar{height:100%;background:linear-gradient(to right,rgba(255,200,100,.8),rgba(255,255,255,.9));width:0;transition:width linear;}
+</style>
+<script>
+// ── SPLASH GLOBALS (must be in head, available before any click) ──────────
+var _ss={cur:0,gone:false,tmr:null};
+function splashExit(){
+  if(_ss.gone)return; _ss.gone=true;
+  clearInterval(_ss.tmr);
+  var sp=document.getElementById('splash');
+  if(!sp)return;
+  sp.style.transition='opacity .85s ease';
+  sp.style.opacity='0';
+  sp.style.pointerEvents='none';
+  setTimeout(function(){sp.style.display='none';},900);
+}
+function splashTo(n){
+  var sl=document.querySelectorAll('.ss-slide');
+  var dt=document.querySelectorAll('.ss-dot');
+  if(!sl.length)return;
+  sl[_ss.cur]&&sl[_ss.cur].classList.remove('active');
+  dt[_ss.cur]&&dt[_ss.cur].classList.remove('on');
+  _ss.cur=n;
+  sl[n]&&sl[n].classList.add('active');
+  dt[n]&&dt[n].classList.add('on');
+  var d=sl[n]&&sl[n].dataset;
+  var pl=document.getElementById('ssPlace');
+  var sb=document.getElementById('ssSub');
+  if(pl)pl.textContent=(d&&d.place)||'';
+  if(sb)sb.textContent=(d&&d.sub)||'';
+}
+
+// ── Init Splash ─────────────────────────────────────────────────────────────
+(function(){
+  var bar=document.getElementById('ssBar');
+  /* bar: see DOMContentLoaded */
+  _ss.tmr=setInterval(function(){
+    if(_ss.gone){clearInterval(_ss.tmr);return;}
+    var next=(_ss.cur+1)%5;
+    if(next===0){splashExit();return;}
+    splashTo(next);
+  },2200);
+  setTimeout(splashExit,11400);
+})();
+</script>
+</head>
+<body>
+
+<div id="splash">
+  <div class="ss-slide  active" data-place="瑞巖寺・松島" data-sub="伊達政宗菩提寺，桃山式木造建築" style="background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/211030_Zuigan-ji_Matsushima_Miyagi_pref_Japan10s3.jpg/1280px-211030_Zuigan-ji_Matsushima_Miyagi_pref_Japan10s3.jpg')"></div>
+  <div class="ss-slide" data-place="Nikka 宮城峽蒸溜所" data-sub="翠綠山林中的威士忌聖地" style="background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Miyagikyo_Distillery_01.jpg/1280px-Miyagikyo_Distillery_01.jpg')"></div>
+  <div class="ss-slide" data-place="鶴之城・會津若松" data-sub="日本東北最美的城郭建築" style="background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/AizuCastle.jpg/1280px-AizuCastle.jpg')"></div>
+  <div class="ss-slide" data-place="大内宿" data-sub="江戶時代茅草宿場街道" style="background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Ouchijuku_town_like_Edo_era_-_panoramio.jpg/960px-Ouchijuku_town_like_Edo_era_-_panoramio.jpg')"></div>
+  <div class="ss-slide" data-place="榮螺堂" data-sub="世界唯一六角三層螺旋建築" style="background-image:url('https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Aizu_Sazaedou.jpg/960px-Aizu_Sazaedou.jpg')"></div>
+  <div class="ss-grad"></div>
+  <div class="ss-txt">
+    <span class="ss-leaf">🌿</span>
+    <span class="ss-main">仙台・東北</span>
+    <span class="ss-dates">七天旅遊行程　7/18 – 7/25</span>
+    <span class="ss-place" id="ssPlace">瑞巖寺・松島</span>
+    <span class="ss-sub" id="ssSub">伊達政宗菩提寺，桃山式木造建築</span>
+    <div class="ss-dots"><div class="ss-dot  on" onclick="splashTo(0)"></div><div class="ss-dot" onclick="splashTo(1)"></div><div class="ss-dot" onclick="splashTo(2)"></div><div class="ss-dot" onclick="splashTo(3)"></div><div class="ss-dot" onclick="splashTo(4)"></div></div>
+  </div>
+  <div id="ss-skip" onclick="splashExit()">點擊跳過 ▶</div>
+  <div class="ss-bar"><div id="ssBar"></div></div>
+</div>
+<div id="topbar">
+  <div id="topbar-inner">
+    <div style="font-size:1.4em">🌿</div>
+    <h1>仙台・東北 7天行程 <span>7/18（五）– 7/25（六）　自駕 11人</span></h1>
+    <div id="topbar-badge">🍑 牛舌行</div>
+  </div>
+  <div id="viewSwitch">
+    <div class="vbtn active" data-view="card">📱 行程卡片</div>
+    <div class="vbtn" data-view="table">📋 行程總表</div>
+    <div class="vbtn" data-view="map">🗺 路線地圖</div>
+    <div class="vbtn" data-view="rec">💡 額外推薦</div>
+  </div>
+  <div id="dayTabs">
+    <div class="day-tab active" data-day="0">總覽</div>
+    <div class="day-tab" data-day="1">D1 7/18</div>
+    <div class="day-tab" data-day="2">D2 7/19</div>
+    <div class="day-tab" data-day="3">D3 7/20</div>
+    <div class="day-tab" data-day="4">D4-5 7/21-22</div>
+    <div class="day-tab" data-day="5">D5-7 7/22-24</div>
+    <div class="day-tab" data-day="6">返台 7/25</div>
+  </div>
+</div>
+
+<!-- ═══ CARD VIEW ═══ -->
+<div class="view active" id="cardView">
+<div class="card-content">
+
+<!-- Day 0 總覽 -->
+<div class="day-sec active" id="card-0">
+  <div class="mini-map-card">
+    <div class="mini-map-hdr">🗺 本次旅遊路線全貌　宮城・山形・福島・新潟</div>
+    <div id="miniMap"></div>
+    <div class="route-pills">
+      <span class="pill" style="background:#3a6b8a">✈高雄</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#4a7860">🥩仙台</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#b03535">🍶Nikka</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#b03535">🦀松島</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#3d7a52">🥩米澤</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#3d7a52">🍑豬苗代</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#6b4a9a">🏘大内宿</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#6b4a9a">🏯会津</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#c07838">🍶新潟</span><span style="color:#aaa;font-size:.8em">→</span>
+      <span class="pill" style="background:#3a6b8a">✈返台</span>
+    </div>
+    <div style="padding:0 12px 10px;font-size:.73em;color:#4a7860;font-weight:600;">🥩 吃爆牛舌　🍑 水蜜桃季節　🍶 東北日本酒　🦀 松島海鮮　☀️ 夏日東北　楽しみ！</div>
+  </div>
+
+  <div class="alert-card">
+    <h3>⚠️ 出發前確認事項</h3>
+    <ul>
+      <li data-i="🍶">Nikka宮城峽需預約（nikka.com，每月15日開放次月）</li>
+      <li data-i="🥩">上杉伯爵邸強烈建議提前訂位（Tabelog）</li>
+      <li data-i="🚗">11人建議2台或大廂型車，取車前確認</li>
+      <li data-i="🍺">開車者不得試飲Nikka，出發前確認駕駛</li>
+      <li data-i="🛒">入住偏遠民宿前先至附近超市採買食材</li>
+      <li data-i="⛽">租車時附帶ETC卡，高速公路省時省錢</li>
+    </ul>
+  </div>
+
+  <div class="rt-card">
+    <div class="sec-lbl" style="padding-top:0">📍 每日概覽</div>
+    <div class="rt-step"><div class="rt-dot" style="background:#3a6b8a">✈</div><div class="rt-info"><strong>7/18 高雄 → 仙台</strong><span>13:25起飛・16:10抵達</span></div></div>
+    <div class="rt-step"><div class="rt-dot" style="background:#4a7860">1</div><div class="rt-info"><strong>Day 1　仙台市區</strong><span>抵達・仙台駅牛舌晚餐</span></div></div>
+    <div class="rt-step"><div class="rt-dot" style="background:#b03535">2</div><div class="rt-info"><strong>Day 2　Nikka宮城峽 → 松島</strong><span>取車・試飲・松島三景・海鮮</span></div></div>
+    <div class="rt-step"><div class="rt-dot" style="background:#3d7a52">3</div><div class="rt-info"><strong>Day 3　米澤 → 豬苗代湖</strong><span>米澤牛・上杉神社・民宿入住</span></div></div>
+    <div class="rt-step"><div class="rt-dot" style="background:#6b4a9a">4-5</div><div class="rt-info"><strong>Day 4–5　大内宿 → 會津若松</strong><span>茅草古村・鶴之城・末廣酒造</span></div></div>
+    <div class="rt-step"><div class="rt-dot" style="background:#c07838">5-7</div><div class="rt-info"><strong>Day 5–7　新潟市 & 五泉市</strong><span>日本酒・越光米・海鮮</span></div></div>
+    <div class="rt-step"><div class="rt-dot" style="background:#3a6b8a">✈</div><div class="rt-info"><strong>7/25 仙台 → 高雄</strong><span>19:00起飛・22:10抵台</span></div></div>
+  </div>
+
+
+  <div class="info-card">
+    <h3>✈️ 基本資訊</h3>
+    <div class="irow"><span class="lbl">去程</span><span class="val">7/18 高雄 13:25 → 仙台 16:10</span></div>
+    <div class="irow"><span class="lbl">回程</span><span class="val">7/25 仙台 19:00 → 高雄 22:10</span></div>
+    <div class="irow"><span class="lbl">人數</span><span class="val">大人 10位 + 兒童 1位（10歲）</span></div>
+    <div class="irow"><span class="lbl">租車</span><span class="val">Toyota Rent a Car｜7/19早上取車 → 7/24傍晚還車</span></div>
+    <div class="irow"><span class="lbl">機場車資</span><span class="val">¥660×10 + ¥330×1 = ¥6,930</span></div>
+  </div>
+</div>
+
+<!-- Day 1 -->
+<div class="day-sec" id="card-1">
+  <div class="day-hdr" style="background:linear-gradient(135deg,#3a6b8a,#5a8fa8)"><h2>✈ Day 1　7/18（五）</h2><p>高雄出發 → 仙台抵達 → 牛舌晚餐</p></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#d8eeda">🏨</div>
+<div class="sc-meta"><div class="sc-time">住宿（全程）</div><div class="sc-name">仙台大和魯內飯店</div><div class="sc-sub">仙台駅東口步行5分鐘・Toyota取車點附近</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/1aTpSrxSBm6RAh3g9" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('hotel')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f8ee">🚃</div>
+<div class="sc-meta"><div class="sc-time">16:10 抵達後</div><div class="sc-name">仙台機場 Access 線</div><div class="sc-sub">約25分鐘直達仙台駅・¥6,930（11人）</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/uo63d6wsANXs2jpt5" target="_blank">📍 地圖</a></div><div class="note" style="">Step 1　出入境大廳(1F) → 電扶梯上2F<br>Step 2　走室內天橋 → 抵「仙台空港駅」閘口<br>Step 3　購票：大人¥660、兒童¥330（可刷Suica/ICOCA）<br>Step 4　快速列車約25分鐘至仙台駅（終點站）<br>⚠ <strong>11人集合確認行李再統一行動</strong></div></div>
+  <div class="sec-lbl">🥩 晚餐：仙台駅3F 牛舌通（4選1）</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🥩</div>
+<div class="sc-meta"><div class="sc-time">推薦① 10:00–21:30</div><div class="sc-name">たんや善治郎 牛たん通り店</div><div class="sc-sub">仙台駅3F 牛舌通</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/4zY2X3zoX8QPoY3U6" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/miyagi/A0401/A040101/4010191/" target="_blank">🍽 Tab</a><a class="btn btn-info" onclick="showInfo('gyutan')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🥩</div>
+<div class="sc-meta"><div class="sc-time">推薦② 10:00–21:30</div><div class="sc-name">牛たん炭焼 利久 仙台駅店</div><div class="sc-sub">仙台駅3F 牛舌通</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/RCTa2vdi28CyhBYZ8" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/miyagi/A0401/A040101/4000097/" target="_blank">🍽 Tab</a><a class="btn btn-info" onclick="showInfo('gyutan')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🥩</div>
+<div class="sc-meta"><div class="sc-time">推薦③ 10:00–21:30</div><div class="sc-name">伊達の牛たん本舗 仙台駅3F</div><div class="sc-sub">仙台駅3F 牛舌通</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/Cvm1ewbeWVMsxHAT9" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/miyagi/A0401/A040101/4000171/" target="_blank">🍽 Tab</a><a class="btn btn-info" onclick="showInfo('gyutan')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🥩</div>
+<div class="sc-meta"><div class="sc-time">推薦④ 10:00–21:30</div><div class="sc-name">味の牛たん喜助 仙台駅店</div><div class="sc-sub">仙台駅3F 牛舌通 / B1 S-PAL</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/PEv4RG6TjfazZNaeA" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/miyagi/A0401/A040101/4000170/" target="_blank">🍽 Tab</a><a class="btn btn-info" onclick="showInfo('gyutan')">📖 介紹</a></div><div class="note" style="">💡 人多先抽號碼牌再逛百貨・站前本店（AK大樓3F）11:00–23:00 是備案</div></div>
+</div>
+
+<!-- Day 2 -->
+<div class="day-sec" id="card-2">
+  <div class="day-hdr" style="background:linear-gradient(135deg,#b03535,#d05050)"><h2>🚗 Day 2　7/19（六）【自駕開始】</h2><p>Toyota取車 → Nikka宮城峽 → 松島</p></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#d8eeda">🚗</div>
+<div class="sc-meta"><div class="sc-time">早上</div><div class="sc-name">Toyota Rent a Car 取車</div><div class="sc-sub">飯店步行5分鐘・自駕正式開始！</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/LH7R62XHnCDxBGvp6" target="_blank">📍 地圖</a></div><div class="note" style="">⚠ 確認車輛數・記得拿ETC卡</div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#f0e8ff">🍶</div>
+<div class="sc-meta"><div class="sc-time">09:00　⚠ 需預約</div><div class="sc-name">Nikka 宮城峽蒸溜所</div><div class="sc-sub">9:15–16:00｜導覽含試飲約70分鐘・時段至14:30</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/q9CTpd8TWBEdQ2wKA" target="_blank">📍 地圖</a><a class="btn btn-off" href="https://www.nikka.com/distilleries/miyagikyo/" target="_blank">🔗 官網</a><a class="btn btn-info" onclick="showInfo('nikka')">📖 介紹</a></div><div class="note" style="">⚠ 每月15日開放次月預約｜<strong>開車者不得試飲！</strong></div></div>
+  <div class="sec-lbl">🍽 Nikka 附近午餐（作並エリア）</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🍕</div>
+<div class="sc-meta"><div class="sc-time">午餐①</div><div class="sc-name">Les Copains de Campagne</div><div class="sc-sub">咖哩披薩・作並エリア・僅週末</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/6GX9mWSNMMjpwLAy7" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/miyagi/A0401/A040101/4002028/" target="_blank">🍽 Tab</a><a class="btn btn-info" onclick="showInfo('campagne')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🍜</div>
+<div class="sc-meta"><div class="sc-time">午餐②</div><div class="sc-name">どうだんの里（蕎麥麵）</div><div class="sc-sub">作並エリア・傳統蕎麥麵</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/ft92dpsb4ons9pQx8" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/miyagi/A0401/A040101/4002395/" target="_blank">🍽 Tab</a><a class="btn btn-info" onclick="showInfo('dodan')">📖 介紹</a></div></div>
+  <div class="sec-lbl">🏝 松島觀光（14:00 抵達）</div>
+  <div class="note" style="">⚠ 停「松島海岸站」周邊停車場，勿開往「松島站」</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🏯</div>
+<div class="sc-meta"><div class="sc-time">14:30</div><div class="sc-name">瑞巖寺</div><div class="sc-sub">日本三大名景・松島代表性寺廟</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/M7pb11fEQRqqahLv9" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('matsushima')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">⛩</div>
+<div class="sc-meta"><div class="sc-time">14:30</div><div class="sc-name">五大堂</div><div class="sc-sub">松島灣絕景觀景台・免費入場</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/gygVHWnQnHF1giiQ7" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('matsushima')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f0ff">⛵</div>
+<div class="sc-meta"><div class="sc-time">遊覽船</div><div class="sc-name">松島灣遊覽船</div><div class="sc-sub">約50分鐘・¥1,500/人・末班可賞夕陽</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/qKLaVdXZLTqZHKTC9" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('matsushima')">📖 介紹</a></div></div>
+  <div class="sec-lbl">🦞 松島晚餐</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🦞</div>
+<div class="sc-meta"><div class="sc-time">晚餐①</div><div class="sc-name">南部屋（松島海鮮）</div><div class="sc-sub">碼頭對面・新鮮海鮮</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/83NYUmVq91REzXfJ8" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/miyagi/A0404/A040404/4000396/" target="_blank">🍽 Tab</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🦀</div>
+<div class="sc-meta"><div class="sc-time">晚餐②</div><div class="sc-name">郷土料理 味勘</div><div class="sc-sub">烤牡蠣吃到飽 45分 ¥3,300</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/cMG94wXDvtsJ6kaw9" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('ajikan')">📖 介紹</a></div></div>
+</div>
+
+<!-- Day 3 -->
+<div class="day-sec" id="card-3">
+  <div class="day-hdr" style="background:linear-gradient(135deg,#3d7a52,#5a9a6a)"><h2>🚗 Day 3　7/20（日）</h2><p>仙台 → 米澤（山形）→ 豬苗代湖</p></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🥩</div>
+<div class="sc-meta"><div class="sc-time">午餐　⚠ 強烈建議預約</div><div class="sc-name">上杉伯爵邸（米澤牛）</div><div class="sc-sub">米澤牛牛排 & 壽喜燒｜國家有形文化財</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/Yks1eWTSuMKnwB2a6" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/yamagata/A0602/A060201/6000443/" target="_blank">🍽 Tab訂位</a><a class="btn btn-info" onclick="showInfo('uesugi')">📖 介紹</a></div><div class="note" style="">⚠ 米澤牛為日本三大和牛・11人務必提前訂位！</div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">⛩</div>
+<div class="sc-meta"><div class="sc-time">下午</div><div class="sc-name">上杉神社</div><div class="sc-sub">伯爵邸旁邊步行即到・供奉上杉謙信</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/Ei8NNiZeVRcc5UVk9" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('shrine')">📖 介紹</a></div></div>
+  <div class="sec-lbl">🛒 入住前超市採買（民宿偏遠，必買！）</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#fef9c0">🛒</div>
+<div class="sc-meta"><div class="sc-time">傍晚前　9:00–21:00</div><div class="sc-name">York Benimaru 猪苗代店</div><div class="sc-sub">猪苗代町字梨木西92｜生鮮蔬果齊全</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/NFM3rsZu3WCWbMbb7" target="_blank">📍 地圖</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#fef9c0">🛒</div>
+<div class="sc-meta"><div class="sc-time">傍晚前　8:00–21:00</div><div class="sc-name">Lion D'or 磐梯店</div><div class="sc-sub">磐梯町山道311-55｜當地商品・有ATM</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/N9MjK3dyCdc87Sij6" target="_blank">📍 地圖</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#d8eeda">🏠</div>
+<div class="sc-meta"><div class="sc-time">傍晚　入住</div><div class="sc-name">豬苗代湖民宿</div><div class="sc-sub">Koriyama, Fukushima 963-1411｜偏遠，GPS必用</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/ZFSmhDPBuDHhNU4YA" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('inawashiro')">📖 介紹</a></div><div class="note" style="">🛶 <strong>湖邊小屋特色</strong>：備有獨木舟及救生衣，可以多多享受湖邊悠閒生活！<br>清晨划獨木舟看日出、傍晚岸邊野餐，是這趟旅程最放鬆的時光 🍃<br><br>附近7-11：<a href="https://maps.app.goo.gl/cSBFsVU75TE3v1R99" style="color:#2d6048;font-weight:600">點此導航</a></div></div>
+</div>
+
+<!-- Day 4-5 -->
+<div class="day-sec" id="card-4">
+  <div class="day-hdr" style="background:linear-gradient(135deg,#6b4a9a,#8a68b8)"><h2>🏯 Day 4–5　7/21–7/22（一、二）</h2><p>大内宿 → 豬苗代湖周邊 → 會津若松</p></div>
+  <div class="note" style="background:#f3eeff;border-left-color:#8a68b8;color:#4a1880;">💡 建議：Day 4 上午往大内宿（車程1.5h），午後北上會津若松，Day 5 豬苗代湖周邊輕鬆遊</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#f0e8ff">🏘</div>
+<div class="sc-meta"><div class="sc-time">Day 4 上午　⭐ 新增</div><div class="sc-name">大内宿（大內宿）</div><div class="sc-sub">江戶時代茅草古宿場・自駕1.5h・免費入場</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/Q6PZFGkRMrhKNdEp7" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('ouchi')">📖 介紹</a></div><div class="note" style="">⚠ 停車場8:30前到・名物「ねぎそば」（蔥蕎麥麵）必吃</div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🗻</div>
+<div class="sc-meta"><div class="sc-time">Day 5 景點</div><div class="sc-name">磐梯山</div><div class="sc-sub">活火山・東北著名山岳景觀</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/u15s1kz9VSHKjvmm6" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('bandai')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🏛</div>
+<div class="sc-meta"><div class="sc-time">景點　¥1,000</div><div class="sc-name">野口英世記念館</div><div class="sc-sub">猪苗代町・日本著名細菌學家故居</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/MVJwzJE8s4AQDL5Q6" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('noguchi')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🏯</div>
+<div class="sc-meta"><div class="sc-time">景點　¥410</div><div class="sc-name">鶴之城（會津若松城）</div><div class="sc-sub">東北代表性城郭・天守閣登高眺望</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/fVafdmLHJU1FbDio8" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('tsuruga')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#f0e8ff">🍶</div>
+<div class="sc-meta"><div class="sc-time">體驗　¥400</div><div class="sc-name">末廣酒造 嘉永藏</div><div class="sc-sub">会津若松市日新町12-38｜日本酒釀造參觀</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/Ttx419invsjcJzyX9" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/fukushima/A0705/A070501/7011575/" target="_blank">🍽 Tab</a><a class="btn btn-info" onclick="showInfo('suehiro')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🐚</div>
+<div class="sc-meta"><div class="sc-time">景點</div><div class="sc-name">榮螺堂（さざえ堂）</div><div class="sc-sub">六角三層螺旋建築・世界唯一</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/z1vD2oydXskRquEP6" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('sazaedo')">📖 介紹</a></div></div>
+</div>
+
+<!-- Day 5-7 -->
+<div class="day-sec" id="card-5">
+  <div class="day-hdr" style="background:linear-gradient(135deg,#c07838,#e09a58)"><h2>🌊 Day 5–7　7/22–7/24（三至五）</h2><p>新潟市區 & 五泉市　日本酒・越光米故鄉</p></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#d8eeda">🏠</div>
+<div class="sc-meta"><div class="sc-time">住宿</div><div class="sc-name">新潟 五泉市民宿</div><div class="sc-sub">五泉市 1490 Maoroshi</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/6pLQrWKYsbVaLMKZ9" target="_blank">📍 地圖</a></div></div>
+  <div class="sec-lbl">🏙 新潟市區景點</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🛍</div>
+<div class="sc-meta"><div class="sc-time">景點</div><div class="sc-name">古町商店街</div><div class="sc-sub">新潟市中心商圈・信濃川夜景</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/uuESbkHvmkKzzM8dA" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('furumachi')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🏛</div>
+<div class="sc-meta"><div class="sc-time">景點</div><div class="sc-name">舊齋藤家別邸</div><div class="sc-sub">重要文化財・江戶時代庭園</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/m3hvRaxi1vJjyDFL6" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('saito')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#f0e8ff">🍶</div>
+<div class="sc-meta"><div class="sc-time">體驗　免費</div><div class="sc-name">今代司酒造</div><div class="sc-sub">越光米日本酒試飲・免費參觀</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/RPCCTkYhoy4QZJkn6" target="_blank">📍</a><a class="btn btn-off" href="https://imayotsukasa.co.jp/" target="_blank">🔗 官網</a><a class="btn btn-info" onclick="showInfo('imayo')">📖 介紹</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🐟</div>
+<div class="sc-meta"><div class="sc-time">景點</div><div class="sc-name">新潟市水族館 マリンピア日本海</div><div class="sc-sub">日本海邊最大水族館</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/pTZ1nUcpsnCTTpC36" target="_blank">📍 地圖</a><a class="btn btn-info" onclick="showInfo('aquarium')">📖 介紹</a></div></div>
+  <div class="sec-lbl">🍜 五泉市民宿附近餐廳</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🍜</div>
+<div class="sc-meta"><div class="sc-time">餐廳①　週二公休</div><div class="sc-name">さらい 五泉本店</div><div class="sc-sub">11:00–14:00/18:00–23:00｜貝類湯頭拉麵＋豬肉丼</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/AzpFhgZNVuYRvebj9" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/niigata/A1505/A150501/15021005/" target="_blank">🍽 Tab</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#ffe8e8">🍝</div>
+<div class="sc-meta"><div class="sc-time">餐廳②　週一公休</div><div class="sc-name">Springs レストラン</div><div class="sc-sub">11:00–21:30｜義式料理・兒童友善</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/JyEvfQSa3j7TtoU67" target="_blank">📍</a><a class="btn btn-tab" href="https://tabelog.com/niigata/A1505/A150501/15020743/" target="_blank">🍽 Tab</a></div></div>
+  <div class="sec-lbl">🛒 五泉市超市</div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#fef9c0">🛒</div>
+<div class="sc-meta"><div class="sc-time">9:00–24:00</div><div class="sc-name">Uoroku 五泉店</div><div class="sc-sub">今泉930｜晚上9點後有折扣商品</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/e9LxbZWudeTKCgQb9" target="_blank">📍 地圖</a></div></div>
+</div>
+
+<!-- Day 6 (返台) -->
+<div class="day-sec" id="card-6">
+  <div class="day-hdr" style="background:linear-gradient(135deg,#3a6b8a,#5a8fa8)"><h2>✈ Day 7–8　7/24–7/25（五、六）</h2><p>仙台還車 & 最後購物 & 返台</p></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#d8eeda">🚗</div>
+<div class="sc-meta"><div class="sc-time">7/24 傍晚</div><div class="sc-name">Toyota Rent a Car 還車</div><div class="sc-sub">飯店步行5分鐘・自駕結束</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/LH7R62XHnCDxBGvp6" target="_blank">📍 地圖</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#e8f5ee">🛍</div>
+<div class="sc-meta"><div class="sc-time">7/24晚 & 7/25白天</div><div class="sc-name">仙台駅 最後購物</div><div class="sc-sub">牛舌伴手禮・ずんだ餅・SS30・藤崎百貨</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/VY5CW7KVdhYgxr3C8" target="_blank">📍 地圖</a></div></div>
+  <div class="spot-card">
+<div class="sc-head"><div class="sc-icon" style="background:#d8eeda">✈</div>
+<div class="sc-meta"><div class="sc-time">16:30 前往機場</div><div class="sc-name">仙台機場 出發</div><div class="sc-sub">Access線 3F第3月台・約25分鐘・¥6,930</div></div></div>
+<div class="sc-btns"><a class="btn btn-map" href="https://maps.app.goo.gl/F2uYfidPym58NHLx7" target="_blank">📍 地圖</a></div><div class="note" style="">✈ 仙台 19:00 起飛 → 高雄 22:10 抵達<br>⚠ 確認護照・機票・行李件數</div></div>
+</div>
+
+</div><!-- /card-content -->
+</div><!-- /cardView -->
+
+<!-- ═══ TABLE VIEW ═══ -->
+<div class="view" id="tableView">
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Day</th><th>時間</th><th>行程/景點</th><th>類型</th><th>連結</th><th>備註</th></tr></thead>
+<tbody>
+<tr class="day-row"><td colspan="6">✈ Day 1　7/18（五）　高雄出發 → 仙台抵達 → 牛舌晚餐</td></tr>
+<tr><td>D1</td><td>住宿</td><td>仙台大和魯內飯店</td><td><span class="badge" style="background:#3a6b8a">🏨住宿</span></td><td><a class="tlink" href="https://maps.app.goo.gl/1aTpSrxSBm6RAh3g9" target="_blank">📍</a></td><td>仙台駅東口5分</td></tr>
+<tr><td>D1</td><td>16:10</td><td>仙台機場 Access 線</td><td><span class="badge" style="background:#64748b">🚃交通</span></td><td><a class="tlink" href="https://maps.app.goo.gl/uo63d6wsANXs2jpt5" target="_blank">📍</a></td><td>¥6,930・25分</td></tr>
+<tr><td>D1</td><td>晚餐</td><td>たんや善治郎 牛たん通り店</td><td><span class="badge" style="background:#e04545">🥩餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/4zY2X3zoX8QPoY3U6" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/miyagi/A0401/A040101/4010191/" target="_blank">🍽</a></td><td>3F 10–21:30</td></tr>
+<tr><td>D1</td><td>晚餐</td><td>牛たん炭焼 利久 仙台駅店</td><td><span class="badge" style="background:#e04545">🥩餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/RCTa2vdi28CyhBYZ8" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/miyagi/A0401/A040101/4000097/" target="_blank">🍽</a></td><td>3F 10–21:30</td></tr>
+<tr><td>D1</td><td>晚餐</td><td>伊達の牛たん本舗 仙台駅3F</td><td><span class="badge" style="background:#e04545">🥩餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/Cvm1ewbeWVMsxHAT9" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/miyagi/A0401/A040101/4000171/" target="_blank">🍽</a></td><td>3F 10–21:30</td></tr>
+<tr><td>D1</td><td>晚餐</td><td>味の牛たん喜助 仙台駅店</td><td><span class="badge" style="background:#e04545">🥩餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/PEv4RG6TjfazZNaeA" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/miyagi/A0401/A040101/4000170/" target="_blank">🍽</a></td><td>3F 10–21:30</td></tr>
+<tr class="day-row"><td colspan="6">🚗 Day 2　7/19（六）　Toyota取車 → Nikka宮城峽 → 松島　【自駕開始】</td></tr>
+<tr><td>D2</td><td>早上</td><td>Toyota Rent a Car 取車</td><td><span class="badge" style="background:#64748b">🚗交通</span></td><td><a class="tlink" href="https://maps.app.goo.gl/LH7R62XHnCDxBGvp6" target="_blank">📍</a></td><td>飯店步行5分</td></tr>
+<tr><td>D2</td><td>09:00</td><td>Nikka 宮城峽蒸溜所</td><td><span class="badge" style="background:#7b52ab">🍶體驗</span></td><td><a class="tlink" href="https://maps.app.goo.gl/q9CTpd8TWBEdQ2wKA" target="_blank">📍</a> <a class="tlink" href="https://www.nikka.com/distilleries/miyagikyo/" target="_blank">🔗</a></td><td>⚠需預約</td></tr>
+<tr><td>D2</td><td>午餐</td><td>Les Copains de Campagne</td><td><span class="badge" style="background:#e04545">🍕餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/6GX9mWSNMMjpwLAy7" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/miyagi/A0401/A040101/4002028/" target="_blank">🍽</a></td><td>僅週末</td></tr>
+<tr><td>D2</td><td>午餐</td><td>どうだんの里（蕎麥麵）</td><td><span class="badge" style="background:#e04545">🍜餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/ft92dpsb4ons9pQx8" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/miyagi/A0401/A040101/4002395/" target="_blank">🍽</a></td><td>作並エリア</td></tr>
+<tr><td>D2</td><td>14:30</td><td>瑞巖寺</td><td><span class="badge" style="background:#3d7a52">🏯景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/M7pb11fEQRqqahLv9" target="_blank">📍</a></td><td>松島代表寺廟</td></tr>
+<tr><td>D2</td><td>14:30</td><td>五大堂</td><td><span class="badge" style="background:#3d7a52">⛩景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/gygVHWnQnHF1giiQ7" target="_blank">📍</a></td><td>免費</td></tr>
+<tr><td>D2</td><td>下午</td><td>松島灣遊覽船</td><td><span class="badge" style="background:#3d7a52">⛵景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/qKLaVdXZLTqZHKTC9" target="_blank">📍</a></td><td>50分¥1,500</td></tr>
+<tr><td>D2</td><td>晚餐</td><td>南部屋（松島海鮮）</td><td><span class="badge" style="background:#e04545">🦞餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/83NYUmVq91REzXfJ8" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/miyagi/A0404/A040404/4000396/" target="_blank">🍽</a></td><td>碼頭對面</td></tr>
+<tr><td>D2</td><td>晚餐</td><td>郷土料理 味勘</td><td><span class="badge" style="background:#e04545">🦀餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/cMG94wXDvtsJ6kaw9" target="_blank">📍</a></td><td>牡蠣吃到飽</td></tr>
+<tr class="day-row"><td colspan="6">🚗 Day 3　7/20（日）　仙台 → 米澤 → 豬苗代湖</td></tr>
+<tr><td>D3</td><td>午餐</td><td>上杉伯爵邸（米澤牛）</td><td><span class="badge" style="background:#e04545">🥩餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/Yks1eWTSuMKnwB2a6" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/yamagata/A0602/A060201/6000443/" target="_blank">🍽</a></td><td>⚠強烈建議訂位</td></tr>
+<tr><td>D3</td><td>下午</td><td>上杉神社</td><td><span class="badge" style="background:#3d7a52">⛩景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/Ei8NNiZeVRcc5UVk9" target="_blank">📍</a></td><td>伯爵邸旁</td></tr>
+<tr><td>D3</td><td>傍晚</td><td>York Benimaru 猪苗代店</td><td><span class="badge" style="background:#c07838">🛒超市</span></td><td><a class="tlink" href="https://maps.app.goo.gl/NFM3rsZu3WCWbMbb7" target="_blank">📍</a></td><td>9–21:00</td></tr>
+<tr><td>D3</td><td>傍晚</td><td>Lion D'or 磐梯店</td><td><span class="badge" style="background:#c07838">🛒超市</span></td><td><a class="tlink" href="https://maps.app.goo.gl/N9MjK3dyCdc87Sij6" target="_blank">📍</a></td><td>8–21:00・ATM</td></tr>
+<tr><td>D3</td><td>傍晚</td><td>豬苗代湖民宿</td><td><span class="badge" style="background:#3a6b8a">🏠住宿</span></td><td><a class="tlink" href="https://maps.app.goo.gl/ZFSmhDPBuDHhNU4YA" target="_blank">📍</a></td><td>🛶獨木舟・救生衣</td></tr>
+<tr class="day-row"><td colspan="6">🏯 Day 4–5　7/21–7/22（一、二）　大内宿 → 豬苗代湖 → 會津若松</td></tr>
+<tr><td>D4</td><td>早上</td><td>大内宿 ⭐</td><td><span class="badge" style="background:#7b52ab">🏘景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/Q6PZFGkRMrhKNdEp7" target="_blank">📍</a></td><td>茅草古村・8:30前到</td></tr>
+<tr><td>D4-5</td><td>景點</td><td>磐梯山</td><td><span class="badge" style="background:#3d7a52">🗻景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/u15s1kz9VSHKjvmm6" target="_blank">📍</a></td><td>活火山</td></tr>
+<tr><td>D4-5</td><td>景點</td><td>野口英世記念館</td><td><span class="badge" style="background:#3d7a52">🏛景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/MVJwzJE8s4AQDL5Q6" target="_blank">📍</a></td><td>¥1,000</td></tr>
+<tr><td>D4-5</td><td>景點</td><td>鶴之城（會津若松城）</td><td><span class="badge" style="background:#3d7a52">🏯景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/fVafdmLHJU1FbDio8" target="_blank">📍</a></td><td>¥410</td></tr>
+<tr><td>D4-5</td><td>體驗</td><td>末廣酒造 嘉永藏</td><td><span class="badge" style="background:#7b52ab">🍶體驗</span></td><td><a class="tlink" href="https://maps.app.goo.gl/Ttx419invsjcJzyX9" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/fukushima/A0705/A070501/7011575/" target="_blank">🍽</a></td><td>¥400</td></tr>
+<tr><td>D4-5</td><td>景點</td><td>榮螺堂（さざえ堂）</td><td><span class="badge" style="background:#3d7a52">🐚景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/z1vD2oydXskRquEP6" target="_blank">📍</a></td><td>六角三層</td></tr>
+<tr class="day-row"><td colspan="6">🌊 Day 5–7　7/22–7/24（三至五）　新潟市 & 五泉市</td></tr>
+<tr><td>D5-7</td><td>住宿</td><td>新潟 五泉市民宿</td><td><span class="badge" style="background:#3a6b8a">🏠住宿</span></td><td><a class="tlink" href="https://maps.app.goo.gl/6pLQrWKYsbVaLMKZ9" target="_blank">📍</a></td><td>五泉市 Maoroshi</td></tr>
+<tr><td>D5-7</td><td>景點</td><td>古町商店街</td><td><span class="badge" style="background:#3d7a52">🛍景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/uuESbkHvmkKzzM8dA" target="_blank">📍</a></td><td>新潟市中心</td></tr>
+<tr><td>D5-7</td><td>景點</td><td>舊齋藤家別邸</td><td><span class="badge" style="background:#3d7a52">🏛景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/m3hvRaxi1vJjyDFL6" target="_blank">📍</a></td><td>重要文化財</td></tr>
+<tr><td>D5-7</td><td>體驗</td><td>今代司酒造</td><td><span class="badge" style="background:#7b52ab">🍶體驗</span></td><td><a class="tlink" href="https://maps.app.goo.gl/RPCCTkYhoy4QZJkn6" target="_blank">📍</a> <a class="tlink" href="https://imayotsukasa.co.jp/" target="_blank">🔗</a></td><td>免費試飲</td></tr>
+<tr><td>D5-7</td><td>景點</td><td>新潟市水族館</td><td><span class="badge" style="background:#3d7a52">🐟景點</span></td><td><a class="tlink" href="https://maps.app.goo.gl/pTZ1nUcpsnCTTpC36" target="_blank">📍</a></td><td>日本海最大</td></tr>
+<tr><td>D5-7</td><td>餐廳</td><td>さらい 五泉本店</td><td><span class="badge" style="background:#e04545">🍜餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/AzpFhgZNVuYRvebj9" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/niigata/A1505/A150501/15021005/" target="_blank">🍽</a></td><td>週二公休</td></tr>
+<tr><td>D5-7</td><td>餐廳</td><td>Springs レストラン</td><td><span class="badge" style="background:#e04545">🍝餐廳</span></td><td><a class="tlink" href="https://maps.app.goo.gl/JyEvfQSa3j7TtoU67" target="_blank">📍</a> <a class="tlink" href="https://tabelog.com/niigata/A1505/A150501/15020743/" target="_blank">🍽</a></td><td>週一公休</td></tr>
+<tr><td>D5-7</td><td>超市</td><td>Uoroku 五泉店</td><td><span class="badge" style="background:#c07838">🛒超市</span></td><td><a class="tlink" href="https://maps.app.goo.gl/e9LxbZWudeTKCgQb9" target="_blank">📍</a></td><td>9–24:00</td></tr>
+<tr class="day-row"><td colspan="6">✈ Day 7–8　7/24–7/25（五、六）　仙台還車 & 購物 & 返台</td></tr>
+<tr><td>D8</td><td>7/24傍晚</td><td>Toyota Rent a Car 還車</td><td><span class="badge" style="background:#64748b">🚗交通</span></td><td><a class="tlink" href="https://maps.app.goo.gl/LH7R62XHnCDxBGvp6" target="_blank">📍</a></td><td>自駕結束</td></tr>
+<tr><td>D8</td><td>7/24-25</td><td>仙台駅 最後購物</td><td><span class="badge" style="background:#3d7a52">🛍購物</span></td><td><a class="tlink" href="https://maps.app.goo.gl/VY5CW7KVdhYgxr3C8" target="_blank">📍</a></td><td>牛舌・ずんだ餅</td></tr>
+<tr><td>D8</td><td>16:30</td><td>仙台機場 出發</td><td><span class="badge" style="background:#64748b">✈交通</span></td><td><a class="tlink" href="https://maps.app.goo.gl/F2uYfidPym58NHLx7" target="_blank">📍</a></td><td>19:00→高雄22:10</td></tr>
+</tbody></table>
+</div>
+</div>
+
+<!-- ═══ MAP VIEW ═══ -->
+<div class="view" id="mapView">
+  <div id="leafletMap"></div>
+  <div class="map-legend">
+    <div><span style="color:#4a7860;font-size:1.1em">●</span> 仙台（出發/終點）</div>
+    <div><span style="color:#b03535;font-size:1.1em">●</span> D2 Nikka/松島</div>
+    <div><span style="color:#3d7a52;font-size:1.1em">●</span> D3 米澤/豬苗代</div>
+    <div><span style="color:#6b4a9a;font-size:1.1em">●</span> D4-5 大内宿/会津</div>
+    <div><span style="color:#c07838;font-size:1.1em">●</span> D5-7 新潟/五泉</div>
+    <div style="margin-top:3px;padding-top:3px;border-top:1px solid #c8e0ca"><span style="color:#4a7860">- -</span> 自駕路線</div>
+  </div>
+</div>
+
+<!-- ═══ RECOMMENDATIONS VIEW ═══ -->
+<div class="view" id="recView">
+<div class="card-content">
+  <div style="background:linear-gradient(135deg,#4a7860,#6a9e80);border-radius:12px;padding:12px 14px;margin-bottom:10px;color:#fff;">
+    <div style="font-size:1em;font-weight:700;">💡 額外推薦清單</div>
+    <div style="font-size:.76em;opacity:.88;margin-top:3px;">行程外的精選餐廳 & 景點，自駕可隨時加入！</div>
+  </div>
+  <div style="background:#4a7860;color:#fff;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:.8em;font-weight:700;">🍽 推薦餐廳</div>
+  <div class="sec-lbl">📍 仙台</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c9795e;font-size:1.1em">🥩</div>
+  <div class="sc-meta"><div class="sc-name">牛たん炭焼 利久 西口本店</div><div class="sc-sub">仙台最具代表性老店・炭烤牛舌・JR仙台駅西口步行5分</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=牛たん炭焼+利久+西口本店+仙台" target="_blank">📍 地圖</a> <a class="btn btn-tab" href="https://tabelog.com/miyagi/A0401/A040101/4002679/" target="_blank">🍽 Tabelog</a></div><div class="note" style="margin-top:0">💡 行程D1也可選擇這間本店，更道地</div></div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c9795e;font-size:1.1em">🍡</div>
+  <div class="sc-meta"><div class="sc-name">ずんだ茶寮 仙台駅ずんだ小径店</div><div class="sc-sub">毛豆（ずんだ）甜品・抹茶・必買伴手禮・仙台駅3F</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=ずんだ茶寮+仙台駅" target="_blank">📍 地圖</a> <a class="btn btn-tab" href="https://tabelog.com/miyagi/A0401/A040101/4000101/" target="_blank">🍽 Tabelog</a></div><div class="note" style="margin-top:0">💡 毛豆麻糬冰淇淋超必吃，回程排隊買</div></div><div class="sec-lbl">📍 松島</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#b03535;font-size:1.1em">🦪</div>
+  <div class="sc-meta"><div class="sc-name">海松（うみまつ）牡蠣懷石</div><div class="sc-sub">新鮮牡蠣懷石料理・需提前預約・俯瞰松島灣</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=海松+うみまつ+松島+宮城" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 高級感，適合想吃好一點的松島晚餐，需提前訂位</div></div><div class="sec-lbl">📍 米澤</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#3d7a52;font-size:1.1em">🥩</div>
+  <div class="sc-meta"><div class="sc-name">米澤牛 黄木 米沢本店</div><div class="sc-sub">米澤牛壽喜燒・涮涮鍋・CP值高於上杉伯爵邸</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=米澤牛+黄木+米沢本店+山形" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 若上杉伯爵邸訂不到位，這間是最佳備案</div></div><div class="sec-lbl">📍 會津若松</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#6b4a9a;font-size:1.1em">🍱</div>
+  <div class="sc-meta"><div class="sc-name">田季野（わっぱ飯）</div><div class="sc-sub">會津傳統わっぱ飯（木桶飯）・郷土料理・七日町</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=田季野+会津若松" target="_blank">📍 地圖</a> <a class="btn btn-tab" href="https://tabelog.com/fukushima/A0705/A070501/7000102/" target="_blank">🍽 Tabelog</a></div><div class="note" style="margin-top:0">💡 11人務必訂位，榮螺堂參觀後可順路</div></div><div class="sec-lbl">📍 新潟</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c07838;font-size:1.1em">🍣</div>
+  <div class="sc-meta"><div class="sc-name">回轉壽司（新潟市區）</div><div class="sc-sub">新潟近海鮮魚壽司・CP值超高・在地人愛店</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=回転寿司+新潟市+古町" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 新潟是壽司激戰區，市區隨便找一間都好吃</div></div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c07838;font-size:1.1em">🍛</div>
+  <div class="sc-meta"><div class="sc-name">万代シティバスセンターのカレー</div><div class="sc-sub">新潟名物！巴士站黃色咖哩・在地B級美食必吃</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=万代シティ+バスセンター+カレー+新潟" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 排隊15分以內，濃郁黃色咖哩，平價必試</div></div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c07838;font-size:1.1em">🍶</div>
+  <div class="sc-meta"><div class="sc-name">ぽんしゅ館 越後のお酒ミュージアム</div><div class="sc-sub">新潟駅內・¥500買代幣可試飲100種清酒・強烈推薦！</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=ぽんしゅ館+新潟駅" target="_blank">📍 地圖</a> <a class="btn btn-tab" href="https://tabelog.com/niigata/A1501/A150101/15013945/" target="_blank">🍽 Tabelog</a></div><div class="note" style="margin-top:0">💡 大人必去・開車者可試非酒精飲品版</div></div>
+  <div style="background:#3a6b8a;color:#fff;border-radius:10px;padding:8px 12px;margin:10px 0 8px;font-size:.8em;font-weight:700;">🏯 推薦景點</div>
+  <div class="sec-lbl">📍 仙台</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c9795e;font-size:1.1em">🏯</div>
+  <div class="sc-meta"><div class="sc-name">仙台城跡（青葉城）</div><div class="sc-sub">伊達政宗騎馬像・仙台市區全景・夜景絕美</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=仙台城跡+青葉城+宮城" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 D1晚上或D8返台前，車程10分鐘</div></div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c9795e;font-size:1.1em">♨</div>
+  <div class="sc-meta"><div class="sc-name">秋保温泉（日歸溫泉）</div><div class="sc-sub">仙台近郊溫泉鄉・D2去Nikka路上可順路</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=秋保温泉+仙台" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 Nikka酒廠同方向，可安排早上泡湯再去</div></div><div class="sec-lbl">📍 松島</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#b03535;font-size:1.1em">🌲</div>
+  <div class="sc-meta"><div class="sc-name">西行戻しの松公園</div><div class="sc-sub">270度俯視松島灣全景展望台・自駕必訪</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=西行戻しの松公園+松島+宮城" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 停車場免費，從高處看松島最美</div></div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#b03535;font-size:1.1em">⛩</div>
+  <div class="sc-meta"><div class="sc-name">円通院（枯山水庭園）</div><div class="sc-sub">江戶時代庭園・五大堂旁走路可到・¥300</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=円通院+松島+宮城" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 松島觀光必排，瑞巖寺參觀完順路走過去</div></div><div class="sec-lbl">📍 福島</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#5a7a8a;font-size:1.1em">🚗</div>
+  <div class="sc-meta"><div class="sc-name">磐梯吾妻スカイライン</div><div class="sc-sub">高原公路・硫磺山展望台・火山地形壯觀（晴天限定）</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=磐梯吾妻スカイライン+福島" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 自駕才能去，D4-5加入路線，天氣好才開放</div></div><div class="sec-lbl">📍 會津若松</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#6b4a9a;font-size:1.1em">👘</div>
+  <div class="sc-meta"><div class="sc-name">會津武家屋敷</div><div class="sc-sub">江戶時代武士宅邸群・可穿武士服拍照・¥850</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=会津武家屋敷+会津若松+福島" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 兒童超愛，鶴之城參觀完走路5分鐘</div></div><div class="sec-lbl">📍 新潟</div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c07838;font-size:1.1em">🌸</div>
+  <div class="sc-meta"><div class="sc-name">瓢湖（白鳥湖）</div><div class="sc-sub">阿賀野市・夏季蓮花盛開・五泉市車程20分</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=瓢湖+阿賀野市+新潟" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 入場¥100，周邊散步免費，清晨最美</div></div><div class="spot-card">
+<div class="sc-head">
+  <div class="sc-icon" style="background:#c07838;font-size:1.1em">🏛</div>
+  <div class="sc-meta"><div class="sc-name">新潟市歷史博物館（みなとぴあ）</div><div class="sc-sub">港口城市歷史・明治建築・信濃川旁</div></div>
+</div>
+<div class="sc-btns"><a class="btn btn-map" href="https://www.google.com/maps/search/?api=1&query=新潟市歴史博物館+みなとぴあ" target="_blank">📍 地圖</a></div><div class="note" style="margin-top:0">💡 下雨備案，¥300，外觀建築就值得拍照</div></div>
+  <div style="height:16px"></div>
+</div>
+</div>
+
+<!-- ═══ BOTTOM NAV ═══ -->
+<nav id="bnav">
+  <div class="bnav-item active" data-day="0"><div class="bnav-icon">🗺</div>總覽</div>
+  <div class="bnav-item" data-day="1"><div class="bnav-icon">①</div>7/18</div>
+  <div class="bnav-item" data-day="2"><div class="bnav-icon">②</div>7/19</div>
+  <div class="bnav-item" data-day="3"><div class="bnav-icon">③</div>7/20</div>
+  <div class="bnav-item" data-day="4"><div class="bnav-icon">④⑤</div>7/21-22</div>
+  <div class="bnav-item" data-day="5"><div class="bnav-icon">⑤⑦</div>7/22-24</div>
+  <div class="bnav-item" data-day="6"><div class="bnav-icon">✈</div>返台</div>
+</nav>
+
+<!-- ═══ INFO 底部介紹面板 ═══ -->
+<div class="info-overlay" id="infoOverlay"></div>
+<div class="info-sheet" id="infoSheet">
+  <div class="info-handle"></div>
+  <div class="info-hdr">
+    <div class="info-ttl" id="infoTtl"></div>
+    <button class="info-x" id="infoX" onclick="closeInfo()" aria-label="關閉">✕</button>
+  </div>
+  <div class="info-photos" id="infoPhotos"></div>
+  <div class="info-body">
+    <div class="info-desc" id="infoDesc"></div>
+    <div class="info-lnks" id="infoLnks"></div>
+  </div>
+</div>
+
+<script>
+// ── HEIGHT MANAGER ───────────────────────────────────────
+function setHeights() {
+  var topH = document.getElementById('topbar').offsetHeight;
+  var bnavH = document.getElementById('bnav').offsetHeight;
+  var winH = window.innerHeight;
+  document.querySelectorAll('.view').forEach(function(v) {
+    v.style.top = topH + 'px';
+    v.style.height = (winH - topH) + 'px';
+  });
+  // card view: leave room for bnav
+  document.getElementById('cardView').style.height = (winH - topH - bnavH) + 'px';
+  document.getElementById('recView').style.height = (winH - topH - bnavH) + 'px';
+}
+window.addEventListener('load', setHeights);
+window.addEventListener('resize', setHeights);
+
+// ── STATE ───────────────────────────────────────────────
+var currentView = 'card';
+var currentDay  = 0;
+var mapInited   = false;
+var miniInited  = false;
+
+// ── SWITCH VIEW ─────────────────────────────────────────
+function switchView(v) {
+  currentView = v;
+  document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById(v + 'View').classList.add('active');
+  document.querySelectorAll('.vbtn').forEach(function(el) {
+    el.classList.remove('active');
+    if (el.dataset.view === v) el.classList.add('active');
+  });
+  var isCard = (v === 'card' || v === 'rec');
+  // day tabs: only show in card mode
+  document.getElementById('dayTabs').style.display = (v === 'card') ? 'flex' : 'none';
+  document.getElementById('bnav').style.display = (v === 'card') ? 'flex' : 'none';
+  setHeights();
+  if (v === 'map' && !mapInited) initMainMap();
+}
+
+// ── SWITCH DAY ──────────────────────────────────────────
+function switchDay(n) {
+  currentDay = n;
+  document.querySelectorAll('.day-sec').forEach(function(el) { el.classList.remove('active'); });
+  var s = document.getElementById('card-' + n);
+  if (s) s.classList.add('active');
+  document.querySelectorAll('.day-tab').forEach(function(el) {
+    el.classList.remove('active');
+    if (parseInt(el.dataset.day) === n) el.classList.add('active');
+  });
+  document.querySelectorAll('.bnav-item').forEach(function(el) {
+    el.classList.remove('active');
+    if (parseInt(el.dataset.day) === n) el.classList.add('active');
+  });
+  var at = document.querySelector('#dayTabs .day-tab.active');
+  if (at) at.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+  document.getElementById('cardView').scrollTop = 0;
+  if (n === 0 && !miniInited) initMiniMap();
+}
+
+// ── BIND EVENTS ─────────────────────────────────────────
+document.querySelectorAll('.vbtn').forEach(function(el) {
+  el.addEventListener('click', function() { switchView(this.dataset.view); });
+});
+document.querySelectorAll('.day-tab').forEach(function(el) {
+  el.addEventListener('click', function() { switchDay(parseInt(this.dataset.day)); });
+});
+document.querySelectorAll('.bnav-item').forEach(function(el) {
+  el.addEventListener('click', function() { switchDay(parseInt(this.dataset.day)); });
+});
+
+// ── MAP ──────────────────────────────────────────────────
+var ROUTE = [
+  [38.2602,140.8823],[38.3620,140.7240],[38.3680,141.0665],
+  [38.2602,140.8823],[37.9154,140.1192],[37.4700,140.1000],
+  [37.1246,139.7789],[37.4938,139.9297],[37.4700,140.1000],
+  [37.7354,139.1844],[37.9023,139.0235],[37.7354,139.1844],
+  [38.2602,140.8823]
+];
+var SPOTS = [
+  {ll:[38.2602,140.8823],n:'仙台（出發/終點）',i:'🥩',c:'#4a7860'},
+  {ll:[38.3620,140.7240],n:'Nikka 宮城峽蒸溜所',i:'🍶',c:'#b03535'},
+  {ll:[38.3680,141.0665],n:'松島',i:'🦀',c:'#b03535'},
+  {ll:[37.9154,140.1192],n:'米澤（上杉伯爵邸）',i:'🥩',c:'#3d7a52'},
+  {ll:[37.4700,140.1000],n:'豬苗代湖民宿 🛶',i:'🍑',c:'#3d7a52'},
+  {ll:[37.1246,139.7789],n:'大内宿（茅草古村）',i:'🏘',c:'#6b4a9a'},
+  {ll:[37.4938,139.9297],n:'會津若松（鶴之城）',i:'🏯',c:'#6b4a9a'},
+  {ll:[37.9023,139.0235],n:'新潟市',i:'🍶',c:'#c07838'},
+  {ll:[37.7354,139.1844],n:'五泉市民宿',i:'🏠',c:'#c07838'},
+];
+function mkIcon(c,i,sz) {
+  var s=sz||30;
+  return L.divIcon({html:'<div style="background:'+c+';width:'+s+'px;height:'+s+'px;border-radius:50%;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:'+(s*.5)+'px">'+i+'</div>',className:'',iconSize:[s,s],iconAnchor:[s/2,s/2]});
+}
+function initMiniMap() {
+  miniInited = true;
+  var m = L.map('miniMap',{center:[38.2,140.0],zoom:6,zoomControl:false,attributionControl:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+  L.polyline(ROUTE,{color:'#4a7860',weight:2.5,opacity:.8,dashArray:'7,4'}).addTo(m);
+  SPOTS.forEach(function(s){ L.marker(s.ll,{icon:mkIcon(s.c,s.i,22)}).addTo(m).bindPopup('<b>'+s.n+'</b>'); });
+}
+function initMainMap() {
+  mapInited = true;
+  var m = L.map('leafletMap',{center:[38.2,140.0],zoom:7});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(m);
+  L.polyline(ROUTE,{color:'#4a7860',weight:3.5,opacity:.85,dashArray:'9,5'}).addTo(m);
+  SPOTS.forEach(function(s){ L.marker(s.ll,{icon:mkIcon(s.c,s.i,32)}).addTo(m).bindPopup('<b style="color:'+s.c+'">'+s.i+' '+s.n+'</b>',{maxWidth:200}); });
+  [{ll:[38.33,140.80],t:'Day 2',c:'#b03535'},{ll:[37.70,140.18],t:'Day 3',c:'#3d7a52'},{ll:[37.20,139.82],t:'Day 4-5',c:'#6b4a9a'},{ll:[37.85,139.10],t:'Day 5-7',c:'#c07838'}].forEach(function(d){
+    L.marker(d.ll,{icon:L.divIcon({html:'<span style="background:'+d.c+';color:white;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2)">'+d.t+'</span>',className:'',iconAnchor:[20,10]})}).addTo(m);
+  });
+}
+
+// ── INIT ─────────────────────────────────────────────────
+setHeights();
+initMiniMap();
+
+var SI={
+gyutan:{title:'仙台名物 牛舌（牛たん）',desc:'仙台最具代表性的在地美食，以厚切牛舌佐麥飯和牛尾湯聞名全日本。二戰後由仙台廚師佐野啟四郎發明，將原本不受重視的牛舌以鹽麴醃製後炭烤，造就獨特的Q彈口感。仙台車站3F「牛たん通り」聚集善治郎、利久、伊達の牛たん等名店，人多建議先抽號碼牌再逛百貨。推薦套餐通常含牛舌定食（3–5片）＋麥飯＋牛尾湯，每人約¥1,500–3,000。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Gyutan_teishoku.JPG/500px-Gyutan_teishoku.JPG","https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Gyutan_karaage.jpg/500px-Gyutan_karaage.jpg"],links:[['📖 牛舌燒 中文維基','https://zh.wikipedia.org/wiki/牛舌燒','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=仙台駅+牛たん通り&tbm=isch','photo']]},
+nikka:{title:'Nikka 宮城峽蒸溜所',desc:'NIKKA威士忌的第二個蒸溜所，1969年建立於仙台郊區翠綠山林中。廣瀬川和新川的清冽水源搭配蘇格蘭式鍋型蒸餾器，共同成就細緻優雅的威士忌風味。廠區保留老式蒸餾器和熟成倉庫。導覽行程約70分鐘，含免費試飲多款威士忌，是東北最受歡迎的酒廠體驗。⚠ 開車者請注意不得飲酒。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Miyagikyo_Distillery_01.jpg/500px-Miyagikyo_Distillery_01.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Miyagikyo_Distillery_05.jpg/500px-Miyagikyo_Distillery_05.jpg"],links:[['🔗 官方網站','https://www.nikka.com/distilleries/miyagikyo/','site'],['📖 宮城峽蒸餾所 維基','https://zh.wikipedia.org/wiki/宮城峽蒸餾所','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=Nikka宮城峡蒸溜所&tbm=isch','photo']]},
+matsushima:{title:'松島（瑞巖寺・五大堂）',desc:'日本三大名景之一，松島灣由260多座形態各異的小島構成絕美海景。瑞巖寺是伊達政宗的菩提寺，有宏偉的參道古杉和精緻的桃山式建築；五大堂矗立於小島上，以透かし橋（透空橋）相連，是松島的標誌性地標。遊覽船航程約50分鐘，從海上欣賞群島全貌，末班船可賞夕陽餘暉。入場費：瑞巖寺¥700。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/Matsushima.jpg/500px-Matsushima.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/211030_Kameshima_Matsushima_Miyagi_pref_Japan01n.jpg/500px-211030_Kameshima_Matsushima_Miyagi_pref_Japan01n.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/A_cruise_boat_at_Matsushima.jpg/500px-A_cruise_boat_at_Matsushima.jpg"],links:[['🔗 瑞巖寺官網','https://www.zuiganji.or.jp/','site'],['📖 松島 中文維基','https://zh.wikipedia.org/wiki/松島_(宮城縣)','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=松島+宮城&tbm=isch','photo']]},
+uesugi:{title:'上杉伯爵邸（米澤牛）',desc:'國家登錄有形文化財，原為上杉伯爵家的別邸（1925年建造），現為品嚐米澤牛的高級餐廳。明治時代的木造洋式建築，從餐廳可俯瞰精心修剪的日式庭園，環境典雅古樸。米澤牛與松阪牛、神戶牛並稱日本三大和牛，以細緻霜降肉質和濃郁風味聞名，11人用餐務必提前訂位。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Uesugi_Hakushakutei_and_moat_of_Yonezawa_Castle.jpg/500px-Uesugi_Hakushakutei_and_moat_of_Yonezawa_Castle.jpg"],links:[['🔗 官方網站','http://uesugi-kinenkan.jp/','site'],['🍽 Tabelog訂位','https://tabelog.com/yamagata/A0602/A060201/6000443/','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=上杉伯爵邸+米沢&tbm=isch','photo']]},
+inawashiro:{title:'豬苗代湖 & 湖邊小屋',desc:'福島縣最大湖泊，也是日本第四大湖，湖水清澈湛藍，磐梯山倒映湖面，四季景色各異。夏季湖水溫暖，是獨木舟、SUP等水上活動的天堂。住宿的湖邊小屋備有獨木舟及救生衣，清晨可划船看日出、傍晚岸邊野餐賞夕陽，是整趟旅程最放鬆愜意的時光。整片湖岸幾乎沒有人工建設，自然純淨。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Mt.Bandai_from_Lake_Inawashiro_02.jpg/500px-Mt.Bandai_from_Lake_Inawashiro_02.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Lake_Inawashiro_view_from_Mt.Bandai.jpg/500px-Lake_Inawashiro_view_from_Mt.Bandai.jpg"],links:[['🔗 猪苗代観光情報','https://www.bandaisan.or.jp/','site'],['📖 豬苗代湖 中文維基','https://zh.wikipedia.org/wiki/豬苗代湖','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=猪苗代湖+福島&tbm=isch','photo']]},
+bandai:{title:'磐梯山',desc:'福島縣的象徵，海拔1816公尺的活火山。1888年大噴發形成現在裏磐梯美麗的湖沼群「五色沼」。從豬苗代湖畔可清晰眺望其雄偉輪廓。山麓是國家公園，夏季高山植物盛開，秋季楓葉如火如荼，是東北最具代表性的自然景觀之一，也是攀山健行的熱門路線。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Mt.Bandai_from_Lake_Inawashiro_02.jpg/500px-Mt.Bandai_from_Lake_Inawashiro_02.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Mt._Bandaisan_0811.JPG/500px-Mt._Bandaisan_0811.JPG"],links:[['🔗 磐梯山観光','https://www.bandaisan.or.jp/','site'],['📖 磐梯山 中文維基','https://zh.wikipedia.org/wiki/磐梯山','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=磐梯山+福島&tbm=isch','photo']]},
+ouchi:{title:'大内宿（大內宿）',desc:'江戶時代（約400年前）保留至今的宿場町（驛站），已被列為日本「重要傳統建築群保存地區」。整條街道兩側排列著茅草屋頂的民宅，現改為商店和餐廳，是日本保存最完整的宿場町之一。名物「ねぎそば」以一根整蔥代替筷子夾麵食用，獨特有趣且味道清甜。積雪季節的冬景也極為美麗。⚠ 建議8:30前到達，停車場極易客滿。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Ouchijuku_2006-11-12.jpg/500px-Ouchijuku_2006-11-12.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Ouchijuku_town_like_Edo_era_-_panoramio.jpg/500px-Ouchijuku_town_like_Edo_era_-_panoramio.jpg"],links:[['🔗 大內宿官網','https://www.ouchi-juku.com/','site'],['📖 大內宿 中文維基','https://zh.wikipedia.org/wiki/大內宿','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=大内宿+福島&tbm=isch','photo']]},
+tsuruga:{title:'鶴之城（會津若松城）',desc:'又稱「鶴之城」，是會津若松市的象徵，初建於1384年，現存天守閣為1965年重建。1868年戊辰戰爭中，城中「白虎隊」少年誤以為城已陷落而集體自刃，悲壯故事至今仍為人傳誦。天守閣內設歷史博物館，登頂可俯瞰整個會津盆地。春季粉色櫻花環繞白色城牆，是東北最美的賞櫻名所之一。門票¥410。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/AizuCastle.jpg/500px-AizuCastle.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Aizuwakamatsu_Castle_ac_%281%29.jpg/500px-Aizuwakamatsu_Castle_ac_%281%29.jpg"],links:[['🔗 官方網站','https://www.tsurugajo.com/','site'],['📖 會津若松城 中文維基','https://zh.wikipedia.org/wiki/會津若松城','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=鶴ヶ城+会津若松&tbm=isch','photo']]},
+suehiro:{title:'末廣酒造 嘉永藏',desc:'創業於1765年（江戶中期）的老字號酒造，「嘉永藏」是1917年建造的國家登錄有形文化財倉庫。以会津盆地的雪融水和当地産酒米釀造多款清酒。導覽行程（約40分鐘）參觀傳統釀酒設備和歷史展示館，含試飲，¥400入場費物超所值。所購清酒可作為伴手禮，風味醇厚。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/%E6%9C%AB%E5%BB%A3%E9%85%92%E9%80%A0_2020.jpg/500px-%E6%9C%AB%E5%BB%A3%E9%85%92%E9%80%A0_2020.jpg"],links:[['🔗 官方網站','https://www.sake-suehiro.jp/','site'],['📸 Google圖片搜尋','https://www.google.com/search?q=末廣酒造+嘉永蔵+会津若松&tbm=isch','photo']]},
+sazaedo:{title:'榮螺堂（さざえ堂）',desc:'建於1796年（江戶時代）的六角三層木造建築，高約16.5公尺，國家重要文化財。其最獨特之處是採用「雙螺旋坡道」設計：上樓與下樓走完全不同的斜坡通道，二者互不相交，確保人潮流暢。這種建築形式在世界上僅此一例，工藝令人嘆為觀止。整棟建築無一根釘子，以傳統榫卯工法建造。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Aizu_Sazaedou.jpg/500px-Aizu_Sazaedou.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Sazaedou_Aidu_Japan01.jpg/500px-Sazaedou_Aidu_Japan01.jpg"],links:[['🔗 官方介紹','http://www.sazaedo.jp/','site'],['📖 榮螺堂 中文維基','https://zh.wikipedia.org/wiki/榮螺堂','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=さざえ堂+会津若松&tbm=isch','photo']]},
+imayo:{title:'今代司酒造',desc:'創業於1767年（江戶中期），是新潟市內保留傳統手工釀造工法的老字號酒造。以「全量純米造り」為最大特色，以越後平野的越光米和阿賀野川伏流水釀造。免費導覽行程約40分鐘，可試飲多款純米酒及大吟釀等高級酒款，是新潟最推薦的酒造體驗。購買的清酒可在日本境內宅配寄回台灣。',imgs:[],links:[['🔗 官方網站','https://imayotsukasa.co.jp/','site'],['📸 Google圖片搜尋','https://www.google.com/search?q=今代司酒造+新潟市&tbm=isch','photo']]},
+noguchi:{title:'野口英世記念館',desc:'日本知名細菌學家野口英世（1876–1928）的出生地。野口英世一生克服貧困與身體殘疾，研究黃熱病、梅毒等傳染病，最終在非洲因感染黃熱病而犧牲。其肖像曾印製於日幣千元紙幣。記念館保留了他童年生活的茅草屋，並展示其生涯事蹟、研究成果及往來書信。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Noguchi_Hideyo.jpg/500px-Noguchi_Hideyo.jpg"],links:[['🔗 官方網站','https://www.noguchihideyo.or.jp/','site'],['📖 野口英世 中文維基','https://zh.wikipedia.org/wiki/野口英世','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=野口英世記念館+猪苗代&tbm=isch','photo']]},
+shrine:{title:'上杉神社',desc:'位於米澤城遺址（舞鶴城）內，供奉戰國名將上杉謙信。上杉謙信以「義」聞名天下，被譽為「戰國最強武將」，神社境內楓樹成蔭，秋季紅葉絢麗。緊鄰上杉伯爵邸，米澤牛午餐後步行即可抵達，是米澤市最重要的歷史勝地。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Haiden_of_Uesugi_Shrine.jpg/500px-Haiden_of_Uesugi_Shrine.jpg"],links:[['🔗 官方網站','https://www.uesugi-jinja.or.jp/','site'],['📖 中文維基','https://zh.wikipedia.org/wiki/上杉神社','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=上杉神社+米沢&tbm=isch','photo']]},
+furumachi:{title:'古町商店街（新潟）',desc:'新潟市傳統的商業中心，被稱為「新潟的銀座」，歷史超過400年。古町通是長達約1.5公里的商店街，匯聚老字號和風商店、現代餐廳和咖啡廳。緊鄰信濃川河畔，傍晚沿河散步，夕陽映照在日本最長河流的水面上，景色如畫。是品嚐新潟地酒和新鮮魚貝料理的最佳地點。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Niigata_Furumachi-dori8_20131021.JPG/500px-Niigata_Furumachi-dori8_20131021.JPG","https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Niigata_Furumachi_REFURU_Nishibori_ROSA_Entrance_May2023.jpg/500px-Niigata_Furumachi_REFURU_Nishibori_ROSA_Entrance_May2023.jpg"],links:[['📖 中文維基','https://zh.wikipedia.org/wiki/古町_(新潟市)','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=古町商店街+新潟&tbm=isch','photo']]},
+saito:{title:'舊齋藤家別邸',desc:'新潟縣指定有形文化財，建於1920年代，是新潟富商齋藤家的夏日別邸。木造日式建築與精心設計的回遊式庭園相映成趣，庭園內植有大型松樹和岩石造景，四季景色各異。春季杜鵑、夏季池畔綠意、秋季紅葉都極為優美。每年定期舉辦傳統藝能展演和茶會。入場費約¥260，是新潟市中心不可錯過的文化景點。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Kyusaitouke002.jpg/500px-Kyusaitouke002.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Kyusaitouke001.jpg/500px-Kyusaitouke001.jpg"],links:[['📖 中文維基','https://zh.wikipedia.org/wiki/舊齋藤家別邸','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=旧斎藤家別邸+新潟&tbm=isch','photo']]},
+aquarium:{title:'新潟市水族館 マリンピア日本海',desc:'日本海沿岸規模最大的水族館，1989年開館，坐落於新潟市海岸邊。館內飼育約500種共2萬條以上的海洋生物，包括日本海特有魚種和世界各地的海洋動物。海豚和海獅秀每天定時舉行，深受兒童喜愛。緊鄰日本海，天氣好時可在水族館旁欣賞大海景色。適合帶孩子前往，也是雨天的絕佳備案。',imgs:["https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Niigata_City_Aquarium_Marinepia_Nihonkai.jpg/500px-Niigata_City_Aquarium_Marinepia_Nihonkai.jpg","https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Niigata_City_Aquarium_%28MARINEPIA_NIHONKAI%29.jpg/500px-Niigata_City_Aquarium_%28MARINEPIA_NIHONKAI%29.jpg"],links:[['🔗 官方網站','https://www.marinepia.or.jp/','site'],['📸 Google圖片搜尋','https://www.google.com/search?q=マリンピア日本海+水族館&tbm=isch','photo']]},
+ajikan:{title:'郷土料理 味勘（松島）',desc:'松島在地知名海鮮料理餐廳，以當地新鮮牡蠣和各種海鮮料理聞名。松島灣是日本最重要的牡蠣產地之一，松島牡蠣個頭較小但風味濃郁，與廣島牡蠣截然不同。餐廳提供烤牡蠣、生牡蠣、牡蠣飯等多種烹調方式，也有海鮮定食套餐。建議配搭松島遊覽船之後前往用餐，享受完整的松島體驗。',imgs:[],links:[['📍 地圖導航','https://maps.app.goo.gl/cMG94wXDvtsJ6kaw9','site'],['📸 Google圖片搜尋','https://www.google.com/search?q=郷土料理+味勘+松島&tbm=isch','photo']]},
+campagne:{title:'Les Copains de Campagne（咖哩披薩）',desc:'隱藏在仙台近郊作並溫泉鄉山林中的小型法式餐廳，提供以當地食材製作的特色咖哩披薩，佐配精選葡萄酒。餐廳建築是一棟小木屋，森林環繞、氣氛靜謐，與附近的 Nikka 宮城峽蒸溜所形成絕佳的一日行程組合。⚠ 僅週末及假日營業，強烈建議提前預約，或先確認當天是否有位置。',imgs:[],links:[['🍽 Tabelog','https://tabelog.com/miyagi/A0401/A040101/4002028/','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=Les+Copains+de+Campagne+作並+仙台&tbm=isch','photo']]},
+dodan:{title:'どうだんの里（蕎麥麵）',desc:'位於仙台郊區作並・秋保エリア的傳統蕎麥麵店，以當地山泉水和手打蕎麥聞名。店名「どうだん」源自日本滿天星（燈台躑躅），春季盛開美麗白花。午餐時段提供多種蕎麥套餐，環境樸素自然，深受仙台在地人喜愛。去 Nikka 蒸溜所的路上順道前往，是完美的午餐選擇。',imgs:[],links:[['🍽 Tabelog','https://tabelog.com/miyagi/A0401/A040101/4002395/','article'],['📸 Google圖片搜尋','https://www.google.com/search?q=どうだんの里+蕎麦+作並&tbm=isch','photo']]},
+hotel:{title:'仙台大和魯內飯店',desc:'位於仙台駅東口步行約5分鐘，是日本知名的「大和魯內（Dormy Inn）」連鎖商務酒店。客房舒適，全館免費提供浴衣，大浴場設有溫泉（人工溫泉），並附設免費夜宵服務（夜鳴きそば）。飯店步行距離即可抵達 Toyota 租車取車點，是整趟旅程的出發基地和最後歸宿。地理位置優越，距離牛舌通り、仙台車站購物設施皆步行可達。',imgs:[],links:[['📸 Google照片','https://www.google.com/search?q=Dormy+Inn+仙台+飯店&tbm=isch','photo']]}
+};
+function showInfo(k){
+  var d=SI[k]; if(!d)return;
+  document.getElementById('infoTtl').textContent=d.title;
+  var ph=document.getElementById('infoPhotos');
+  ph.innerHTML='';
+  var imgs=d.imgs.filter(function(s){return s;});
+  if(imgs.length){
+    ph.className='info-photos '+(imgs.length===1?'one':'two');
+    ph.style.display='grid';
+    imgs.forEach(function(s){
+      var im=document.createElement('img');
+      im.className='info-img';
+      im.referrerPolicy='no-referrer';
+      im.onerror=function(){this.parentNode.style.display='none';};
+      im.src=s;
+      ph.appendChild(im);
+    });
+  } else { ph.style.display='none'; }
+  document.getElementById('infoDesc').textContent=d.desc;
+  var ln=document.getElementById('infoLnks'); ln.innerHTML='';
+  d.links.forEach(function(l){
+    var a=document.createElement('a');
+    a.href=l[1]; a.target='_blank';
+    a.className='ibtn ibtn-'+l[2];
+    a.textContent=l[0];
+    ln.appendChild(a);
+  });
+  document.getElementById('infoOverlay').classList.add('open');
+  document.getElementById('infoSheet').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeInfo(){
+  document.getElementById('infoSheet').classList.remove('open');
+  document.getElementById('infoOverlay').classList.remove('open');
+  document.body.style.overflow='';
+}
+// 點背景遮罩或關閉鈕可收起介紹面板
+document.addEventListener('DOMContentLoaded',function(){
+  var ov=document.getElementById('infoOverlay'); if(ov) ov.addEventListener('click',closeInfo);
+  var xb=document.getElementById('infoX'); if(xb) xb.addEventListener('click',closeInfo);
+});
+</script>
+</body>
+</html>
